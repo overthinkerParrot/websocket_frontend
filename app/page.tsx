@@ -1,101 +1,226 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useRef, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Plug, ArrowRight, Copy } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+type WebSocketMessage = {
+  type: string;
+  data?: string;
+};
+
+interface Message{
+  id: number;
+  content: string;
+  sender: string;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string|undefined>("");
+  const [inputId, setInputId] = useState("");
+  const [inputMessage, setInputMessage] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const handleWebSocketMessage = useCallback((message: MessageEvent) => {
+    const data: WebSocketMessage = JSON.parse(message.data);
+    console.log(data);
+    switch (data.type) {
+      case "connect_id":
+        setSessionId(data.data);
+        break;
+      case "connect_id_error":
+        alert("Invalid session ID");
+        break;
+      default:
+        setMessages((prev) => [
+          ...prev,
+          { id: prev.length, content: data.data, sender: "server" },
+        ]);
+        break;
+    }
+  }, []);
+
+  const connect = () => {
+    const ws = new WebSocket("ws://localhost:8080");
+    ws.onopen = () => {
+      setLoading(false);
+      setConnected(true);
+      wsRef.current = ws;
+      ws.send(JSON.stringify({ type: "connect" }));
+    };
+
+    ws.onmessage = handleWebSocketMessage;
+
+    ws.onclose = () => {
+      setConnected(false);
+      wsRef.current = null;
+    };
+  };
+
+  const connectWithID = () => {
+    console.log("INPUT ID", inputId);
+    //validate the input!!
+    if (wsRef.current) {
+      wsRef.current?.send(
+        JSON.stringify({ type: "connect_id", sessionID: inputId })
+      );
+      setConnected(true);
+    } else {
+      const ws = new WebSocket("ws://localhost:8080");
+      ws.onopen = () => {
+        setLoading(false);
+        setConnected(true);
+        wsRef.current = ws;
+        ws.send(JSON.stringify({ type: "connect_id", sessionID: inputId }));
+      };
+
+      ws.onmessage = handleWebSocketMessage;
+
+      ws.onclose = () => {
+        setConnected(false);
+        wsRef.current = null;
+      };
+    }
+  }
+
+  const handleDisconnect = () => {
+    wsRef.current?.send(JSON.stringify({ type: "disconnect" }));
+    wsRef.current?.close();
+    setConnected(false);
+    setSessionId("");
+  }
+  const handleSendMessage = () => {
+    if (wsRef.current) {
+      wsRef.current.send(
+        JSON.stringify({ type: "message", data: inputMessage })
+      );
+      setMessages((prev) => [
+        ...prev,
+        { id: prev.length, content: inputMessage, sender: "client" },
+      ]);
+      setInputMessage("");
+    } else {
+      alert("Not connected to any session");
+    }
+  };
+  const copyToClipboard = ()=>{
+    if(!sessionId){
+      alert("No session ID to copy")
+    }else{
+      navigator.clipboard.writeText(sessionId).then(()=>{
+        alert("Session ID copied to clipboard")
+      })
+    }
+  }
+  return (
+    <div className="container mx-auto p-4">
+      <div className="flex flex-wrap gap-4 justify-center">
+        {!connected && (
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>WebSocket Connection</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col space-y-4">
+                <>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      type="text"
+                      placeholder="Connect with session ID"
+                      value={inputId}
+                      onChange={(e) => {
+                        setInputId(e.target.value);
+                      }}
+                    />
+                    <Button
+                      onClick={connectWithID}
+                      disabled={loading}
+                      className="whitespace-nowrap"
+                    >
+                      {loading ? "Connecting..." : "Connect"}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    onClick={connect}
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    {loading ? "Connecting..." : "Connect New Session"}
+                    <Plug className="ml-2 h-4 w-4" />
+                  </Button>
+                </>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {connected && (
+          <div className="flex flex-col h-[90vh] w-[50vw] mx-auto border rounded-lg overflow-hidden">
+            <div className="bg-gray-100 p-4 border-b flex justify-between items-center">
+              <div className="font-semibold">Chat Session</div>
+              {sessionId && (
+                <>
+                  <Badge
+                    variant={connected ? "default" : "secondary"}
+                    className={connected ? "bg-green-500" : "bg-red-500"}
+                  >
+                    {connected ? "Connected" : "Disconnected"}: {sessionId}
+                  </Badge>
+                  <Button onClick={copyToClipboard}> <Copy /></Button>
+                </>
+              )}
+            </div>
+            <ScrollArea className="flex-grow p-4">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`mb-2 p-2 rounded-lg ${
+                    message.sender === "client"
+                      ? "bg-blue-500 text-white ml-auto"
+                      : "bg-gray-200 text-gray-800"
+                  } max-w-[80%] ${
+                    message.sender === "client" ? "text-right" : "text-left"
+                  }`}
+                >
+                  {message.content}
+                </div>
+              ))}
+            </ScrollArea>
+            <div className="border-t p-4">
+              <div className="flex space-x-2">
+                <Input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                  placeholder="Type your message..."
+                  disabled={!connected}
+                />
+                <Button onClick={handleSendMessage} disabled={!connected}>
+                  Send
+                </Button>
+              </div>
+              <Button
+                onClick={handleDisconnect}
+                disabled={!connected}
+                variant="destructive"
+                className="mt-2 w-full"
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
