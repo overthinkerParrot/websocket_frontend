@@ -49,7 +49,7 @@ export default function Home() {
   }, []);
 
   const connect = () => {
-    const ws = new WebSocket("ws://localhost:8080");
+    const ws = new WebSocket(process.env.NEXT_PUBLIC_API_URL);
     ws.onopen = () => {
       setLoading(false);
       setConnected(true);
@@ -74,7 +74,7 @@ export default function Home() {
       );
       setConnected(true);
     } else {
-      const ws = new WebSocket("ws://localhost:8080");
+      const ws = new WebSocket(process.env.NEXT_PUBLIC_API_URL);
       ws.onopen = () => {
         setLoading(false);
         setConnected(true);

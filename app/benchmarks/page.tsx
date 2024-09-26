@@ -12,7 +12,7 @@ type DataPoint = {
   memory: number
 }
 
-const WS_URL = 'ws://localhost:8080'
+const WS_URL = process.env.NEXT_PUBLIC_API_URL
 
 export default function SystemMetrics() {
   const [data, setData] = useState<DataPoint[]>([])
